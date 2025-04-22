@@ -1,0 +1,37 @@
+# Observed cut height: 0.024460284
+# Observed size of largest cluster at observed cut height: 9
+# Expected size of largest cluster at observed cut height: 5.49
+# Observed maximum ratio statistic: 1.639
+# Expected maximum ratio statistic: 1.402
+# p-value: 0.19
+# Clusters:
+CD48	ERBB2	ICOSLG	LYPD3	SEZ6L	TNFRSF4	TNFSF13	WFDC2	WIF-1
+5'-NT
+CPE
+CYR61
+DLL1
+EPHA2
+ERBB3
+ERBB4
+ESM-1
+FASLG
+FR-gamma
+FURIN
+GPC1
+Gal-1
+IFN-gamma-R1
+IGF1R
+ITGAV
+ITGB5
+PODXL
+RET
+RSPO3
+SPARC
+SYND1
+TFPI-2
+TGFR-2
+TLR3
+TNFRSF19
+VEGFR-2
+WISP-1
+hK8

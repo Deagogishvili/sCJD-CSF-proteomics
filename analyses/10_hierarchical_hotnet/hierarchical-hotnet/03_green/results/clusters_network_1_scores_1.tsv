@@ -1,0 +1,33 @@
+# Observed cut height: 0.00976751
+# Observed size of largest cluster at observed cut height: 16
+# Expected size of largest cluster at observed cut height: 13.6
+# Observed maximum ratio statistic: 1.176
+# Expected maximum ratio statistic: 1.562
+# p-value: 0.75
+# Clusters:
+ANGPT2	ANGPTL1	CD164	CDH2	CHRDL2	CLSTN2	CLUL1	GAL	KYAT1	LRP11	NT-proBNP	PILRB	RTN4R	SDC4	SEMA3F	VCAN
+ACP6
+ADGRE2
+ANGPTL7
+CANT1
+CLMP
+CTSO
+FAM3C
+IGFBPL1
+KLK10
+LRIG1
+MCFD2
+METRNL
+NECTIN2
+NOMO1
+NPDC1
+NPTXR
+QDPR
+ROR1
+SERPINB6
+SERPINB8
+SUMF2
+TINAGL1
+TXNDC5
+TYMP
+TYRO3
