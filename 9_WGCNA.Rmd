@@ -1,0 +1,285 @@
+---
+title: "WGCNA"
+date: "2025-04-22"
+---
+# Weighted Gene Co-expression Network Analysis (WGCNA)
+=====================================
+
+This notebook performs a Weighted Gene Co-expression Network Analysis (WGCNA) on proteomic data to identify and characterize co-expression modules of proteins that exhibit correlated patterns across samples. Additionally, we apply differential expression analysis to detect proteins whose expression levels significantly differ between diagnostic groups.
+
+Input:
+------
+- olink.xlsx: Protein expression data with columns:
+  * SampleID: Unique sample identifier
+  * Group: Clinical group classification
+  * SubGroup: Diagnostic groups
+  * Strain: Sample strain type
+  * age at LP: Age at lumbar puncture
+  * Sex: Patient sex
+  * [Protein Names]: NPX values for each protein
+
+Output:
+-------
+1. Files:
+  * proteins_modules_info.xlsx: a dataframe showing WGCNA results with columns: 
+      - Protein: protein name
+      - Module: module name to which each protein belongs
+  * Differential_Module_Expression.xlsx: a dataframe with the results of the differential expression analysis with the columns:
+      - Module: module name 
+      - MMV1_P, VV2_P,	MV2K_P: adjusted p-values for pairwise comparisons between each diagnostic group and controls (CTRL)
+      - MMV1_FC	VV2_FC	MV2K_FC: average log-FC for pairwise comparisons between each diagnostic group and controls (CTRL)
+      - Module_Size: number of proteins included in each module
+  * Nodes-Module.txt files: file containing information about the proteins (nodes) in the module.
+  * Edges-Module.txt files: files containing pairwise connections (edges) between proteins.
+2. Plots:
+  * Scale Independece Plot including: 
+      - Scale Independence Plot: a plot showing the scale-free topology fit at various soft thresholding powers, helping to identify the optimal power for network construction
+      - Mean Connectivity Plot: a plot showing the mean connectivity plot at various soft thresholding powers
+  * Module Dendrogram Plot: a hierarchical dendrogram showing protein modules, with each module color representing a group of highly correlated proteins
+  * Eigengene Distribution Plot: A boxplot showing the distribution of eigengenes for each module across different diagnostic groups
+
+
+Analysis Steps:
+---------------
+1. Define Paths, Import and Clean the Data 
+
+2. Proteomic Data Preprocessing  
+  - Separate metadata (SampleID, SubGroup) from proteomic data.  
+  - Remove missing values and standardize the dataset.  
+  - Convert the processed data into a dataframe with SampleID as row names.  
+
+3. Select the Soft Threshold  
+  - Identify the optimal soft threshold power using `pickSoftThreshold()`.  
+  - Plot Scale-free topology fit index as a function of the soft-thresholding power.  
+  - Plot Mean connectivity as a function of the soft-thresholding power.
+
+4. Turn data expression into topological overlap matrix
+  - Build a signed co-expression network using `blockwiseModules()`.  
+  - Generate a hierarchical clustering dendrogram of modules.  
+  - Save the dendrogram visualization.  
+
+5. Export network
+  - Export the networks as edge and node .txt files.
+  - Export the list of proteins and related modules
+
+6. Eigengene Distribution Analysis  
+  - Compute module eigengenes using `moduleEigengenes()`.  
+  - Generate a boxplot showing eigengene distributions across subgroups. 
+
+7. Differential Expression Analysis based on module Log2FC in each CJD subtype  
+  - Compare expression levels of each protein across different subgroups.  
+  - Compute log2 fold change (Log2FC) in each CJD subtype relative to the control group.  
+  - Perform t-tests on module expression data and adjust p-values using the Benjamini-Hochberg (BH) 
+  - Add the "Module Size" Column (number of proteins in each module) and save results.
+
+```{r}
+library(WGCNA)
+library(openxlsx)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(stats)
+
+options(stringsAsFactors = FALSE)
+enableWGCNAThreads()
+
+# Define path
+project_dir <- getwd()
+file_path <- file.path(project_dir, "..", "data", "curated", "olink.xlsx")
+figure_path <- file.path("..", "figures", "WGCNA_HHN")
+if (!dir.exists(figure_path)) {
+  dir.create(figure_path, recursive = TRUE)
+}
+results_path <- file.path(project_dir, "..", "data", "results", "WGCNA")
+if (!dir.exists(results_path)) {
+  dir.create(results_path, recursive = TRUE)
+}
+
+# Import files
+df <- read.xlsx(file_path, sheet = 1)
+df <- df[, !(names(df) %in% c("Group", "Strain", "age.at.LP", "Sex", "Codon.129", "onset-LP", "onset-death", "LP-death", "14-3-3.ELISA", "t-tau", "NfL", 'NP_subtype'))]
+df <- df %>% mutate(SubGroup = recode(SubGroup, "MM(V)1" = "MMV1"))
+```
+
+
+```{r}
+# Data preprocessing
+
+metadata <- df[, c(1, ncol(df))]  # SampleID and SubGroup
+data <- df[, 2:(ncol(df)-1)]      # Proteomic data
+data <- na.omit(data)
+data <- scale(data)
+
+datExpr <- as.data.frame(data)
+rownames(datExpr) <- metadata$SampleID
+
+# Choose soft threshold parameter
+
+powers <- c(1:11, seq(from=12, to=26, by=2))
+sft <- pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
+
+# Plot Scale-free topology fit index as a function of the soft-thresholding power
+png(file.path(figure_path, "scale_independence_plot.png"), width = 4800, height = 3600, res = 600)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red") 
+
+# Plot Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity")) 
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+dev.off()
+
+# Turn data expression into topological overlap matrix
+power=sft$powerEstimate #4
+
+cor <- WGCNA::cor
+coex.net <- blockwiseModules(datExpr, power = power,
+                             TOMType="unsigned", minModuleSize=15,
+                             reassignThreshold=0, mergeCutHeight=0.25,
+                             numericLabels=TRUE, pamRespectsDendro=FALSE,
+                             saveTOMs=TRUE, saveTOMFileBase="coexpression_network", verbose=3)
+cor<- stats::cor
+
+TOM = TOMsimilarityFromExpr(datExpr, power = power)
+
+sizeGrWindow(12, 9)
+mergedColors = labels2colors(coex.net$colors)
+png(file.path(figure_path, "4-module_tree_blockwise.png"), width = 4800, height = 3600, res = 600)
+plotDendroAndColors(coex.net$dendrograms[[1]], mergedColors[coex.net$blockGenes[[1]]],
+                    "Module colors",
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+dev.off()
+
+# Export the networks as edge and node .txt files
+for (i in 1:length(coex.net$MEs)){
+  modules = unique(mergedColors)[i];
+  proteins = colnames(datExpr)
+  inModule = mergedColors %in% modules
+  modProteins = proteins[inModule]
+  modTOM=TOM[inModule,inModule]
+  dimnames(modTOM)=list(modProteins,modProteins)
+  edge_file <- file.path(results_path, paste0("Edges-", modules, ".txt"))
+  node_file <- file.path(results_path, paste0("Nodes-", modules, ".txt"))
+  cyt = exportNetworkToCytoscape(modTOM,
+                                 edgeFile = edge_file,
+                                 nodeFile = node_file,
+                                 weighted = TRUE, threshold = -1, nodeNames = modProteins, nodeAttr = mergedColors[inModule]);
+}
+
+# Export the list of proteins and related modules
+df_to_export <- data.frame(Protein = colnames(datExpr), Module = mergedColors)
+write.xlsx(df_to_export, file.path(results_path, "proteins_modules_info.xlsx"), rowNames = FALSE)
+
+# Plot the distribution of eigengenes by module
+MEs <- moduleEigengenes(datExpr, mergedColors)$eigengenes  # Use mergedColors instead of coex.net$colors
+MEs_long <- reshape2::melt(cbind(metadata, MEs), id.vars = c("SampleID", "SubGroup"))
+
+png(file.path(figure_path, "ME_distribution_X_Module.png"), width = 4800, height = 3600, res = 600)
+ggplot(MEs_long, aes(x = SubGroup, y = value, fill = SubGroup)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free_y") +
+  theme_minimal() +
+  labs(title = "Eigengene Distribution by Module", x = "Group", y = "Eigengene")
+dev.off()
+```
+
+```{r}
+# Differential analysis based on Log2FC
+groups_to_test <- c("MMV1", "VV2", "MV2K")
+data_long <- cbind(metadata, datExpr)
+
+# Calculate the log2FC for each protein in each CJD subtype compared with the control group (CTRL)
+log2FC_results <- list()
+
+for (group in groups_to_test) {
+  log2FC <- sapply(colnames(datExpr), function(protein) {
+    mean_group <- mean(data_long[data_long$SubGroup == group, protein], na.rm = TRUE)
+    mean_ctrl <- mean(data_long[data_long$SubGroup == "CTRL", protein], na.rm = TRUE)
+    return(mean_group - mean_ctrl) 
+  })
+  log2FC_results[[group]] <- log2FC
+}
+
+df_log2FC <- bind_rows(log2FC_results, .id = "SubGroup") %>%
+  pivot_longer(-SubGroup, names_to = "Protein", values_to = "log2FC")
+
+df_log2FC <- df_log2FC %>%
+  left_join(df_to_export %>% select(Protein, Module), by = "Protein")
+
+df_results <- df_log2FC %>%
+  group_by(Module, SubGroup) %>%
+  summarise(mean_logFC = mean(log2FC, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = SubGroup, values_from = mean_logFC, names_prefix = "", names_glue = "{SubGroup}-FC")
+
+# Perform t-tests for each module and group
+t_test_results <- list()
+
+for (module in unique(df_log2FC$Module)) {
+  for (group in groups_to_test) {
+    module_values <- df_log2FC %>% 
+      filter(Module == module, SubGroup == group) %>%
+      pull(log2FC)  # Extract log2FC values for the module & group
+    
+    if (length(module_values) > 1) {  # Ensure enough data for t-test
+      t_test <- t.test(module_values, mu = 0)  # One-sample t-test
+      t_test_results[[paste0(group, "_", module)]] <- data.frame(
+        Module = module,
+        SubGroup = group,
+        P_Value = t_test$p.value
+      )
+    }
+  }
+}
+
+df_p_values <- bind_rows(t_test_results)
+
+# Adjust p-values
+df_p_values <- df_p_values %>%
+  group_by(SubGroup) %>%
+  mutate(Adj_P_Value = p.adjust(P_Value, method = "fdr")) %>%
+  ungroup()
+
+df_p_values <- df_p_values %>%
+  select(Module, SubGroup, Adj_P_Value) %>%
+  pivot_wider(names_from = SubGroup, values_from = Adj_P_Value, names_glue = "{SubGroup}-P")
+
+df_results <- df_results %>%
+  left_join(df_p_values, by = "Module")
+
+# Calculate the module size (number of proteins per module)
+df_module_size <- df_log2FC %>%
+  select(Module, Protein) %>%
+  distinct() %>%
+  group_by(Module) %>%
+  summarise(Module_Size = n(), .groups = "drop")  # Count unique proteins
+
+df_results <- df_results %>%
+  left_join(df_module_size, by = "Module")
+
+write.xlsx(df_results, file.path(results_path, "Differential_Module_Expression.xlsx"), rowNames = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
