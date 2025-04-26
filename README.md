@@ -1,6 +1,6 @@
 # Distinct cerebrospinal fluid proteomic signatures in sporadic Creutzfeldt-Jakob disease subtypes
 
-Giuseppe Mario Bentivengaa, Angela Mammana, Dea Gogishvili, Simone Baiardi, Erica Vittoriosi, Andrea Mastrangelo, Agustina Ranieri, Isabel M. Houtkamp, Kathrin Brockmann, Sanne Abeln, Sabina Capellari, Piero Parchi.
+Giuseppe Mario Bentivenga, Angela Mammana, Dea Gogishvili, Simone Baiardi, Erica Vittoriosi, Andrea Mastrangelo, Agustina Ranieri, Isabel M. Houtkamp, Kathrin Brockmann, Sanne Abeln, Sabina Capellari, Piero Parchi.
 
 ### Abstract
 
