@@ -17,7 +17,5 @@ Figure 1. Study overview. Our dual analytical approach combined machine learning
 
 Details:
 
-- Folder data contains all the datafiles generated during the analysis. Deidentified data can be obtained by request for purposes of replicating results from the corresponding author.
-- Folder figures contains all the generated figures
 - Folder analyses contains the code developed in the study
 
